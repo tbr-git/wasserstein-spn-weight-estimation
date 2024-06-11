@@ -1,0 +1,10 @@
+name: base
+channels:
+  - conda-forge
+dependencies:
+  - ipywidgets
+  - pip
+  - pot
+  - pip:
+    - pm4py
+    - wasserstein

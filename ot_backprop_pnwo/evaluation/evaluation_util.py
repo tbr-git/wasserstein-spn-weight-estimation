@@ -1,15 +1,12 @@
-from collections import namedtuple
 import dataclasses
 import inspect
 from typing import Optional
 import tensorflow as tf
-import numpy as np
-import time
 import logging
 from ot_backprop_pnwo.evaluation.evaluation_param import ConvergenceConfig, TwoPhaseRunUniqueIdentifyingConfig
 from ot_backprop_pnwo.evaluation.evaluation_reporting import EvaluationReporterTwoPhase
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
-from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes, Path2VariantModelFactory
+from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes
 
 from ot_backprop_pnwo.optimization.ot_wo_two_phase import OT_WO_Two_Phase
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
@@ -115,7 +112,6 @@ def _exec_evaluation_both_phases(evaluation_reporter: EvaluationReporterTwoPhase
                                                                             key_param, TEST_MODE=TEST_MODE)
         else:
             logger.debug(f"Skip Phase II")
-
 
 
 def _exec_evaluation_two_phase_from_key_parameters(evaluation_reporter: EvaluationReporterTwoPhase,

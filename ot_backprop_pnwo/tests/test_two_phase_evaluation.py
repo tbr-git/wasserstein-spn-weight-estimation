@@ -7,6 +7,7 @@ import tempfile
 import yaml
 
 from ot_backprop_pnwo.evaluation import evaluation_two_phase
+from ot_backprop_pnwo.evaluation.evaluation_param import ConvergenceConfig
 
 
 class TestPhaseTwoEvaluation(unittest.TestCase):
@@ -14,6 +15,7 @@ class TestPhaseTwoEvaluation(unittest.TestCase):
     TEST_DIR_TASKS = '/home/tobias/ot-wo-evaluation/data/'
     TEST_LOG_PN = (
         ('BPIC18Ref', 'logs/bpic-2018-reference/bpic-2018-reference.xes', 'models/bpic-2018-reference/hot-start', True),
+        ('BPIC18Ref', 'logs/bpic-2018-reference/bpic-2018-reference.xes', 'models/bpic-2018-reference/hot-start/bpic18ref_DFM_ABE.pnml', True),
         #('RTFM', 'logs/road_fines/road_fines.xes', 'models/road_fines/cold-start', False),
     )
     TEST_REPETITIONS = 1
@@ -25,8 +27,12 @@ class TestPhaseTwoEvaluation(unittest.TestCase):
             paths_results = Path(tmp_result_dir_name)
 
             TEST_OT_SIZES = [(40, 40)]
+
+            conv_config = ConvergenceConfig(50, 500, 0.0025)
             evaluation_two_phase.main(l_log_pn_pairs=TestPhaseTwoEvaluation.TEST_LOG_PN,
                                       path_tasks=paths_tasks, path_results=paths_results, 
+                                      conv_config=conv_config,
+                                      enable_phase_two=True,
                                       ot_sizes=TEST_OT_SIZES,
                                       repetitions=TestPhaseTwoEvaluation.TEST_REPETITIONS)
 
@@ -39,7 +45,9 @@ class TestPhaseTwoEvaluation(unittest.TestCase):
             evaluation_two_phase.main(l_log_pn_pairs=TestPhaseTwoEvaluation.TEST_LOG_PN,
                                       path_tasks=paths_tasks, path_results=paths_results, 
                                       ot_sizes=TEST_OT_SIZES,
-                                      repetitions=TestPhaseTwoEvaluation.TEST_REPETITIONS, override=False)
+                                      conv_config=conv_config,
+                                      enable_phase_two=True,
+                                      repetitions=TestPhaseTwoEvaluation.TEST_REPETITIONS)
 
             nbr_results_invoke_2 = len(list(paths_results.glob('**/*.json')))
             

@@ -5,9 +5,9 @@ import numpy as np
 
 from ot_backprop_pnwo.optimization.data.data_creation import prepare_cost_matrix_log_probabilities, spn_path_language_to_tensors
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
-from ot_backprop_pnwo.pn_ot import StochasticPath
 from ot_backprop_pnwo.spn import spn_path_sampling
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
+from ot_backprop_pnwo.spn.stochastic_path import StochasticPath
 from ot_backprop_pnwo.stochastic_language.actindexing import ActivityIDConnector
 from ot_backprop_pnwo.stochastic_language.stochastic_lang import StochasticLang
 

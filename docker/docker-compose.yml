@@ -1,0 +1,23 @@
+# docker-compose
+version: '3.8'
+services:
+  wave-nb-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports: 
+      - "8889:8888"
+    container_name: wawe-nb
+    user: root
+    env_file:
+      - environment.env
+    volumes:
+      - ./data/:/home/jovyan/work/data
+      - ../ot_backprop_pnwo/:/home/jovyan/work/ot_backprop_pnwo
+    #    deploy:
+#  resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: "all"
+#              capabilities: [gpu]

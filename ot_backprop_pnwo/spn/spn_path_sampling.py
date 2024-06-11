@@ -10,7 +10,7 @@ import heapq
 import numpy as np
 import itertools
 import sys
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 from pm4py.objects.petri_net.semantics import weak_execute as execute_transition
 from pm4py.objects.petri_net.obj import PetriNet, Marking
