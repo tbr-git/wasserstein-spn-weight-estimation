@@ -14,3 +14,10 @@ To run the container:
 4. Run `docker compose up`
 5. Attach to the notebook. You will find an example notebook how to call the method. **Or:** Attach to the running container. In the `ot_backprop_pnwo` folder, there is a `scripts` folder that illustrates how you can run the method.
 
+## Non-docker setup
+To run the evaluation (evaluation.evaluation_two_phase), you need:
+- Python
+- Numpy
+- Tensorflow
+- PM4Py
+
