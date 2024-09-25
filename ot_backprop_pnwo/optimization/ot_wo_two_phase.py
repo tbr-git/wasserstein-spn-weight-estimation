@@ -4,7 +4,7 @@ import ot
 from ot_backprop_pnwo.optimization.data.data_phase_one import DataPhaseOne, DataPhaseOneFactory
 from ot_backprop_pnwo.optimization.data.data_phase_two import DataPhaseTwo, DataPhaseTwoFactory
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
-from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes, Path2VariantModelFactory
+from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes, Path2VariantModelFactory, ResidualHandling
 import tensorflow as tf
 import logging
 import time
@@ -65,6 +65,7 @@ class OT_WO_Two_Phase:
                  nbr_samples_phase_two = 10,
                  clip_gradients: bool=False,
                  layer_type: Path2VariantLayerTypes=Path2VariantLayerTypes.BASE_ABS,
+                 residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT,
                  emsc_loss_type: EMSCLossType=EMSCLossType.PEMSC
             ) -> None:
         """Constructor
@@ -83,6 +84,7 @@ class OT_WO_Two_Phase:
             nbr_samples_phase_two: Number of (SPN paths, log variants) combination to use as input.
             clip_gradients (bool): Clip the gradient to [-1, 1] before applying them. Defaults to False.
             layer_type (Path2VariantLayerTypes): Layer that is used to transform paths to variant probabilities (e.g., using absolute transition weights, exp(log(product along path)))
+            residual_handling (ResidualHandling): In case there is residual probability mass for the paths or log, this defines how it is handled. Defaults to adding a residual pat /trace.
             emsc_loss_type (EMSCLossType): Optimize EMSC or penalized EMSC, which penalizes residual flow with cost 1. Default to penalized EMSC.
         """
         # Logger
@@ -105,6 +107,8 @@ class OT_WO_Two_Phase:
         self._clip_gradients = clip_gradients
         # Loss Type
         self._emsc_loss_type = emsc_loss_type
+        # Handling of residual probability
+        self._residual_handling = residual_handling
         # Layer Type
         self._layer_type = layer_type
 
@@ -118,7 +122,8 @@ class OT_WO_Two_Phase:
             act_id_conn = self._act_id_conn,
             max_nbr_paths = self._max_nbr_paths,
             max_nbr_variants = self._max_nbr_variants,
-            emsc_loss_type=self._emsc_loss_type
+            emsc_loss_type=self._emsc_loss_type,
+            residual_handling=self._residual_handling
         )
 
         ### Update requirement of phase two
@@ -130,14 +135,14 @@ class OT_WO_Two_Phase:
         if hot_start:
             self._path_variant_model = Path2VariantModelFactory.init_configuration_with_default(
                 w_transitions_init=self._spn_container.initial_weights, 
-                add_res_prob_path=not self._data_phase_1.is_spn_unfolded,
-                layer_type=self._layer_type)
+                anticipate_path_prob_residual=not self._data_phase_1.is_spn_unfolded,
+                layer_type=self._layer_type, residual_handling=self._residual_handling)
         else:
             nbr_transitions = len(self._spn_container.net.transitions)
             self._path_variant_model = Path2VariantModelFactory.init_configuration_with_default(
                 nbr_transitions=nbr_transitions, 
-                add_res_prob_path=not self._data_phase_1.is_spn_unfolded,
-                layer_type=self._layer_type)
+                anticipate_path_prob_residual=not self._data_phase_1.is_spn_unfolded,
+                layer_type=self._layer_type, residual_handling=self._residual_handling)
         self._time_full = time.time() - time_init_start
         self._logger.info(f"Initialized " + self.configuration_description)
 
@@ -183,7 +188,8 @@ class OT_WO_Two_Phase:
                                                                        self._max_nbr_paths, 
                                                                        self._max_nbr_variants, 
                                                                        self._nbr_samples_phase_two,
-                                                                       self._emsc_loss_type)
+                                                                       self._emsc_loss_type,
+                                                                       self._residual_handling)
 
             train_step_phase_2 = self._create_training_flex(
                 optimizer=optimizer,

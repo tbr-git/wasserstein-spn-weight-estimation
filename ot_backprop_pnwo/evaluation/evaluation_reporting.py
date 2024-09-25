@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ot_backprop_pnwo.evaluation.evaluation_param import ConvergenceConfig, TwoPhaseRunUniqueIdentifyingConfig
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 from ot_backprop_pnwo.optimization.ot_wo_two_phase import OT_WO_Result, OT_WO_Two_Phase
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
 from ot_backprop_pnwo.util.my_util import flatten_dict
@@ -20,7 +21,7 @@ class ExistingInitialRunRepo():
         self.logger.info("Initializing the Initally Existing Run Repository")
         self._df_existing_runs = None
 
-        dummy_key_config = TwoPhaseRunUniqueIdentifyingConfig(EMSCLossType.PEMSC, "", "", 0, 0, False, 0, False, convergence_config=ConvergenceConfig(0, 0, 0))
+        dummy_key_config = TwoPhaseRunUniqueIdentifyingConfig(EMSCLossType.PEMSC, ResidualHandling.ADD_RESIDUAL_ELEMENT, "", "", 0, 0, False, 0, False, convergence_config=ConvergenceConfig(0, 0, 0))
         set_required_columns = set(EvaluationReporterTwoPhase._get_flattened_key_param_dict(dummy_key_config).keys())
         self._key_order = list(set_required_columns)
 

@@ -5,6 +5,7 @@ import numpy as np
 
 from ot_backprop_pnwo.optimization.data.data_creation import prepare_cost_matrix_log_probabilities, spn_path_language_to_tensors
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 from ot_backprop_pnwo.spn import spn_path_sampling
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
 from ot_backprop_pnwo.spn.stochastic_path import StochasticPath
@@ -48,7 +49,8 @@ class DataPhaseOneFactory:
     def create_p1_data(spn_container: SPNWrapper, stoch_lang_log: StochasticLang, 
             act_id_conn: ActivityIDConnector,
             max_nbr_paths: int=300, max_nbr_variants: int=300,
-            emsc_loss_type=EMSCLossType.PEMSC
+            emsc_loss_type=EMSCLossType.PEMSC,
+            residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
             ) -> DataPhaseOne:
         logger = logging.getLogger(DataPhaseOneFactory.__class__.__name__)
         logger.debug(f"Creating data for first phase aiming for OT Size ({max_nbr_paths}, {max_nbr_variants})")
@@ -77,14 +79,21 @@ class DataPhaseOneFactory:
         pseudo_stoch_lang_log = stoch_lang_log
         if not is_log_complete:
             (sl_sample_variants, sl_sample_prob) = stoch_lang_log.most_likely_variants(max_nbr_variants)
+            # Sampling resolution strategy
+            if residual_handling == ResidualHandling.NORMALIZE:
+                sl_sample_prob /= np.sum(sl_sample_prob)
             pseudo_stoch_lang_log = StochasticLang(act_id_conn, sl_sample_variants, sl_sample_prob)
 
 
+
         ((tf_variant_2_paths, tf_paths_nom, tf_paths_denom), stoch_lang_spn) = spn_path_language_to_tensors(paths, act_id_conn)
+        # Only add a residual path, if there is residual AND residual elements enabled
+        add_path_residual_term = (not is_spn_unfolded) and residual_handling == ResidualHandling.ADD_RESIDUAL_ELEMENT
+        add_log_residual_term = (not is_log_complete) and residual_handling == ResidualHandling.ADD_RESIDUAL_ELEMENT
         # Log-Side + Cost matrix
         # Using numpy because we use a python loss
         (b, C) = prepare_cost_matrix_log_probabilities(stoch_lang_spn, pseudo_stoch_lang_log, 
-                                                        add_path_residual_term=not is_spn_unfolded, add_log_residual_term=not is_log_complete, 
+                                                        add_path_residual_term=add_path_residual_term, add_log_residual_term=add_log_residual_term, 
                                                         emsc_loss_type=emsc_loss_type)
 
         return DataPhaseOne(spn_container=spn_container, act_id_conn=act_id_conn, 

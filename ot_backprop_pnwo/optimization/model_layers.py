@@ -20,11 +20,16 @@ class Path2VariantProbabilityLayer(tf.keras.layers.Layer):
 
         self._adds_extra_losses = False
         # Transition weight variable
-        self.w_transitions = self._init_transition_weights(w_transitions_init, nbr_transitions, 
-                                                           tw_clip_min, tw_clip_max)
+        self._w_transitions_init = w_transitions_init 
+        self._nbr_transitions = nbr_transitions 
+        self._tw_clip_min = tw_clip_min 
+        self._tw_clip_max = tw_clip_max
+
+
 
     def build(self, input_shape):
-        pass
+        self.w_transitions = self._init_transition_weights(self._w_transitions_init, self._nbr_transitions, 
+                                                           self._tw_clip_min, self._tw_clip_max)
         # Add as additional trainable variable
         #self.trainable_variables.extend([self.w_transitions])
 
@@ -38,35 +43,40 @@ class Path2VariantProbabilityLayer(tf.keras.layers.Layer):
             if nbr_transitions is None:
                 raise ValueError("Neither transition weights nor number of transitions is provided for initialization")
             else:
-                w_transitions_init = self._get_tw_initializer(nbr_transitions)            
+                w_transitions_initializer = self._get_tw_initializer()            
         else:
-            w_transitions_init = self._adapt_hot_start_weights(w_transitions_init)
+            nbr_transitions = len(w_transitions_init)
+            w_transitions_initializer = self._adapted_hot_start_weight_initializer(w_transitions_init)
 
         # Create variables here because I latter access them
         # Easiest way to use the custom weights to initialize them
         # (Keras automaticall picks up all variables that are member of this class instance)
         if tw_clip_min is not None or tw_clip_max is not None:
-            # Clip transition weights (does not make a lot of sense if log_barrier term is applied, yet we would still do it)
-            w_transitions = tf.Variable(w_transitions_init, dtype=tf.float32, 
-                trainable=True, 
-                constraint=lambda x: tf.clip_by_value(x, 
-                                            0 if tw_clip_min is None else tw_clip_min, 
-                                            Path2VariantProbabilityLayer.MAX_TRANSITION_WEIGHT if tw_clip_max is None else tw_clip_max))
+            constraint = lambda x: tf.clip_by_value(x, 0 if tw_clip_min is None else tw_clip_min, Path2VariantProbabilityLayer.MAX_TRANSITION_WEIGHT if tw_clip_max is None else tw_clip_max)
         else:
-            w_transitions = tf.Variable(w_transitions_init, dtype=tf.float32, trainable=True)
+            constraint = None
+            # Clip transition weights (does not make a lot of sense if log_barrier term is applied, yet we would still do it)
+            #w_transitions = tf.Variable(w_transitions_init, dtype=tf.float32, 
+            #    trainable=True, 
+            #    constraint=lambda x: tf.clip_by_value(x, 
+            #                                0 if tw_clip_min is None else tw_clip_min, 
+            #                                Path2VariantProbabilityLayer.MAX_TRANSITION_WEIGHT if tw_clip_max is None else tw_clip_max))
+            #w_transitions = tf.Variable(w_transitions_init, dtype=tf.float32, trainable=True)
+        w_transitions = self.add_weight(name="transition_weights", shape=[nbr_transitions], 
+                                        initializer=w_transitions_initializer,
+                                        dtype=tf.float32, constraint=constraint)
 
         return w_transitions
     
-    def _get_tw_initializer(self, nbr_transitions):
-        return tf.random_uniform_initializer(minval=0.25, maxval=1.75)(shape=[nbr_transitions])
+    def _get_tw_initializer(self):
+        return tf.random_uniform_initializer(minval=0.25, maxval=1.75)
 
-    def _adapt_hot_start_weights(self, w_transitions_init: npt.NDArray[np.float_]) -> npt.NDArray[np.float_]:
+    def _adapted_hot_start_weight_initializer(self, w_transitions_init: npt.NDArray[np.float_]) -> npt.NDArray[np.float_]:
         # Ensure that transition weights are non-zero
         w_transitions_init = np.where(w_transitions_init > 0, w_transitions_init, Path2VariantProbabilityLayer.MIN_INITIAL_TRANSITION_WEIGHT)
         # Avoid huge weights
         w_transitions_init = w_transitions_init / np.max(w_transitions_init)
-
-        return w_transitions_init
+        return tf.constant_initializer(w_transitions_init)
 
     @property
     def transition_weights(self):
@@ -279,12 +289,12 @@ class Path2VariantProbabilityLayerLogDomain(Path2VariantProbabilityLayer):
         return variant_probabilities
 
 
-    def _get_tw_initializer(self, nbr_transitions):
+    def _get_tw_initializer(self):
         if self._use_log_domain_weights:
             # Log domain values -> Real values approx (0.05, 2.7)
-            w_transitions_init = tf.random_uniform_initializer(minval=-3, maxval=1)(shape=[nbr_transitions])
+            w_transitions_init = tf.random_uniform_initializer(minval=-3, maxval=1)
         else:
-            w_transitions_init = tf.random_uniform_initializer(minval=0.25, maxval=1.75)(shape=[nbr_transitions])
+            w_transitions_init = tf.random_uniform_initializer(minval=0.25, maxval=1.75)
         return w_transitions_init
 
 

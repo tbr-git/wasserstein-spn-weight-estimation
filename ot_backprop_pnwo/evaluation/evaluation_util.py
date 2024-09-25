@@ -6,7 +6,7 @@ import logging
 from ot_backprop_pnwo.evaluation.evaluation_param import ConvergenceConfig, TwoPhaseRunUniqueIdentifyingConfig
 from ot_backprop_pnwo.evaluation.evaluation_reporting import EvaluationReporterTwoPhase
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
-from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes
+from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes, ResidualHandling
 
 from ot_backprop_pnwo.optimization.ot_wo_two_phase import OT_WO_Two_Phase
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
@@ -26,7 +26,8 @@ def exec_log_model_evaluation_two_phase(evaluation_reporter: EvaluationReporterT
                                         TEST_MODE: bool=False,
                                         worker_pool=None,
                                         print_missing_only=False,
-                                        emsc_loss_type=EMSCLossType.PEMSC
+                                        emsc_loss_type=EMSCLossType.PEMSC,
+                                        residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
                             ):
     act_id_conn = ActivityIDConnector(df_ev, net)
     spn_container = SPNWrapper(act_id_conn, net, im, fm)
@@ -54,7 +55,8 @@ def exec_log_model_evaluation_two_phase(evaluation_reporter: EvaluationReporterT
                     hot_start = hot_start,
                     iteration = i,
                     phase_two_enabled = not only_phase_one,
-                    convergence_config= conv_config
+                    convergence_config= conv_config,
+                    residual_handling = residual_handling
                 )
                 if worker_pool is None:
                     _exec_evaluation_both_phases(evaluation_reporter=evaluation_reporter, key_parameterization=key_parameterization, act_id_conn=act_id_conn, spn_container=spn_container, 
@@ -123,7 +125,8 @@ def _exec_evaluation_two_phase_from_key_parameters(evaluation_reporter: Evaluati
                                 hot_start=key_param.hot_start, run_phase_two=key_param.phase_two_enabled,
                                 max_nbr_paths=key_param.max_nbr_paths, max_nbr_variants=key_param.max_nbr_variants,
                                 layer_type=Path2VariantLayerTypes.EXP_LOG_ABS,
-                                emsc_loss_type=key_param.emsc_loss_type)
+                                emsc_loss_type=key_param.emsc_loss_type,
+                                residual_handling=key_param.residual_handling)
 
     optimizer = tf.keras.optimizers.Adam(0.001)
     if TEST_MODE:

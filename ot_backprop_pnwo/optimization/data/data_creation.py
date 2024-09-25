@@ -1,10 +1,9 @@
-from collections import namedtuple
-from functools import partial
 import logging
 import tensorflow as tf
 import numpy as np
 
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 from ot_backprop_pnwo.spn.spn_path_sampling import SPN_TRANSITION_PROBABILITY, get_robust_path_sample, log_sample_statistics
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
 from ot_backprop_pnwo.spn.stochastic_path import StochasticPath
@@ -63,7 +62,8 @@ def create_dataset_flex_paths_variants(spn_container: SPNWrapper, stoch_lang_log
                    act_id_conn: ActivityIDConnector, nbr_sampling_runs: int, 
                    sample_size_model: int, sample_size_log: int, 
                    emsc_loss_type: EMSCLossType,
-                   trans_lh: SPN_TRANSITION_PROBABILITY=SPN_TRANSITION_PROBABILITY.UNIFORM, 
+                   trans_lh: SPN_TRANSITION_PROBABILITY=SPN_TRANSITION_PROBABILITY.UNIFORM,
+                   residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
                    ):
     l_tf_variant_2_paths = []
     l_tf_paths_nom = []
@@ -83,6 +83,8 @@ def create_dataset_flex_paths_variants(spn_container: SPNWrapper, stoch_lang_log
         stoch_paths = spn_paths_samples[s_run]
         # Sample variants
         (sl_sample_variants, sl_sample_prob) = stoch_lang_log.random_subsample(sample_size_log)
+        if residual_handling == ResidualHandling.NORMALIZE:
+            sl_sample_prob /= np.sum(sl_sample_prob)
 
         stoch_lang_spn, net_lang_2_path = StochasticLang.from_stochastic_paths(
             stoch_paths, act_id_conn)
@@ -90,9 +92,10 @@ def create_dataset_flex_paths_variants(spn_container: SPNWrapper, stoch_lang_log
         ####################
         # Cost Matrix
         ####################
+        add_residual_terms = (residual_handling != ResidualHandling.NORMALIZE)
         (b, C) = prepare_cost_matrix_log_probabilities(stoch_lang_spn, 
                 StochasticLang(act_id_conn, sl_sample_variants, sl_sample_prob),
-                add_path_residual_term=True, add_log_residual_term=True, emsc_loss_type=emsc_loss_type)
+                add_path_residual_term=add_residual_terms, add_log_residual_term=add_residual_terms, emsc_loss_type=emsc_loss_type)
 
         # Create tensors
         tf_paths_nom = tf.ragged.constant(list([p.transition_ids for p in stoch_paths]), dtype=tf.int32)
@@ -122,12 +125,12 @@ def create_dataset_flex_paths_variants(spn_container: SPNWrapper, stoch_lang_log
 
 
 def create_dataset_flex_paths(spn_container: SPNWrapper, pseudo_stoch_lang_log: StochasticLang,
-                   act_id_conn: ActivityIDConnector, nbr_sampling_runs: int, 
-                   sampling_run_size: int, 
-                   emsc_loss_type: EMSCLossType,
-                   add_log_residual: bool=False, 
-                   trans_lh: SPN_TRANSITION_PROBABILITY=SPN_TRANSITION_PROBABILITY.UNIFORM):
-
+                              act_id_conn: ActivityIDConnector, nbr_sampling_runs: int,
+                              sampling_run_size: int, emsc_loss_type: EMSCLossType,
+                              residual_on_log: bool=False,
+                              trans_lh: SPN_TRANSITION_PROBABILITY=SPN_TRANSITION_PROBABILITY.UNIFORM,
+                              residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT,
+                              ):
     l_tf_variant_2_paths = []
     l_tf_paths_nom = []
     l_tf_paths_denom = []
@@ -143,9 +146,10 @@ def create_dataset_flex_paths(spn_container: SPNWrapper, pseudo_stoch_lang_log: 
         stoch_paths = spn_paths_samples[s_run]
         
         stoch_lang_spn, net_lang_2_path = StochasticLang.from_stochastic_paths(stoch_paths, act_id_conn)
+        add_path_residual_term = (residual_handling != ResidualHandling.NORMALIZE)
         (b, C) = prepare_cost_matrix_log_probabilities(stoch_lang_spn, 
                 pseudo_stoch_lang_log,
-                add_path_residual_term=True, add_log_residual_term=add_log_residual, emsc_loss_type=emsc_loss_type)
+                add_path_residual_term=add_path_residual_term, add_log_residual_term=residual_on_log, emsc_loss_type=emsc_loss_type)
         
         # Create tensors
         tf_paths_nom = tf.ragged.constant(list([p.transition_ids for p in stoch_paths]), dtype=tf.int32)
@@ -175,24 +179,27 @@ def create_dataset_flex_variants(stoch_lang_spn: StochasticLang,
                                  stoch_lang_log: StochasticLang,
                                  act_id_conn: ActivityIDConnector, nbr_sampling_runs: int, 
                                  sampling_run_size: int,
-                                 extend_for_residual_path: bool,
-                                 emsc_loss_type: EMSCLossType
+                                 residual_on_model: bool,
+                                 emsc_loss_type: EMSCLossType,
+                                 residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT,
                                  ):
-
     l_tf_variant_prob = []
     l_tf_C = []
     logger.debug("Creating dataset of log samples")
     for s_run in range(nbr_sampling_runs):
         # Sample variants
         (sl_sample_variants, sl_sample_prob) = stoch_lang_log.random_subsample(sampling_run_size)
+        if residual_handling == ResidualHandling.NORMALIZE:
+            sl_sample_prob /= np.sum(sl_sample_prob)
         
         ####################
         # Cost Matrix
         ####################
+        add_log_residual_term = (residual_handling != ResidualHandling.NORMALIZE)
         (b, C) = prepare_cost_matrix_log_probabilities(stoch_lang_spn, 
                 StochasticLang(act_id_conn, sl_sample_variants, sl_sample_prob),
-                add_path_residual_term=extend_for_residual_path,
-                add_log_residual_term=True, emsc_loss_type=emsc_loss_type)
+                add_path_residual_term=residual_on_model,
+                add_log_residual_term=add_log_residual_term, emsc_loss_type=emsc_loss_type)
         # Create tensors
         tf_b = tf.constant(b, dtype=tf.float32)
         tf_C = tf.constant(C, dtype=tf.float32)

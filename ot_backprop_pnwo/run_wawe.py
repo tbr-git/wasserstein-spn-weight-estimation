@@ -9,14 +9,11 @@ from pathlib import Path
 import argparse
 import tensorflow as tf
 import yaml
-from ast import literal_eval
-from typing import Iterable
 
 from ot_backprop_pnwo.evaluation.evaluation_param import ConvergenceConfig
-from ot_backprop_pnwo.evaluation.evaluation_reporting import EvaluationReporterTwoPhase, ExistingInitialRunRepo
-from ot_backprop_pnwo.evaluation.evaluation_util import exec_log_model_evaluation_two_phase
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
 from ot_backprop_pnwo.optimization.model import Path2VariantLayerTypes
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 from ot_backprop_pnwo.optimization.ot_wo_two_phase import OT_WO_Two_Phase
 from ot_backprop_pnwo.spn import spn_util
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
@@ -30,6 +27,7 @@ logger = logging.getLogger(__name__)
 def main(path_log: Path, path_pn: Path, path_spn_out: Path, emsc_loss_type: EMSCLossType, 
          max_nbr_paths: int, max_nbr_variants: int,
          layer_type: Path2VariantLayerTypes,
+         residual_handling: ResidualHandling,
          conv_config: ConvergenceConfig, warm_start: bool, phase_two_enabled: bool): 
     ########## Load and Prepare Data ##########
     # Log
@@ -49,11 +47,12 @@ def main(path_log: Path, path_pn: Path, path_spn_out: Path, emsc_loss_type: EMSC
     ########## Optimization ##########
     logger.info("Running weight estimation using subgradient method")
     spn_wo_alg = OT_WO_Two_Phase(spn_container=spn_container, stoch_lang_log=stoch_lang_log, 
-                                act_id_conn=act_id_conn,
-                                hot_start=warm_start, run_phase_two=phase_two_enabled,
-                                max_nbr_paths=max_nbr_paths, max_nbr_variants=max_nbr_variants,
-                                layer_type=layer_type,
-                                emsc_loss_type=emsc_loss_type)
+                                 act_id_conn=act_id_conn,
+                                 hot_start=warm_start, run_phase_two=phase_two_enabled,
+                                 max_nbr_paths=max_nbr_paths, max_nbr_variants=max_nbr_variants,
+                                 layer_type=layer_type,
+                                 emsc_loss_type=emsc_loss_type,
+                                 residual_handling=residual_handling)
 
     optimizer = tf.keras.optimizers.Adam(0.001)
     ot_wo_result = spn_wo_alg.optimize_weights(optimizer, **dataclasses.asdict(conv_config))
@@ -96,6 +95,8 @@ if __name__ == '__main__':
     parser.add_argument('maxNbrVariants', type=int, help="Maximum nbr of trace variants sampled from the event log's stochastic language")
     parser.add_argument('--emscLossType', type=EMSCLossType, choices=list(EMSCLossType), 
                         default=EMSCLossType.PEMSC, help="OT-loss formulation used for optimization")
+    parser.add_argument('--residualHandling', type=ResidualHandling, choices=list(ResidualHandling), 
+                        default=ResidualHandling.ADD_RESIDUAL_ELEMENT, help="How residual probability is handled (i.e., by adding a residual model or log trace or by normalization")
     # Convergence Criterion
     parser.add_argument('--convMinIter', type=int, default=50)
     parser.add_argument('--convMaxIter', type=int, default=5000)
@@ -109,6 +110,7 @@ if __name__ == '__main__':
     path_pn = Path(args.pathPN)
     path_spn_out = Path(args.pathOutput)
     emsc_loss_type = args.emscLossType
+    residual_handling = args.residual_handling
     max_nbr_paths = args.maxNbrSPNPaths
     max_nbr_variants = args.maxNbrVariants
     conv_config = ConvergenceConfig(args.convMinIter, args.convMaxIter, args.convEps)
@@ -118,4 +120,4 @@ if __name__ == '__main__':
     main(path_log, path_pn, path_spn_out, emsc_loss_type, 
          max_nbr_paths, max_nbr_variants, 
          Path2VariantLayerTypes.EXP_LOG_ABS,
-         conv_config, warm_start, phase_two_enabled) 
+         conv_config, warm_start, phase_two_enabled, residual_handling) 

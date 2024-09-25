@@ -29,12 +29,17 @@ echo "Changing into: $(pwd)"
 
 START=$(date +%s)
 
-python -m ot_backprop_pnwo.evaluation.evaluation_two_phase ot-wo-evaluation/data/test-data "ot-wo-evaluation/$1" PEMSC --repetitions 2 --poolSize 6 --logNetData "${LOG_SPN_PAIRS[*]}" --otSizes 100,100 --enablePhaseII
+# Replicate Phase 1
+#python -m ot_backprop_pnwo.evaluation.evaluation_two_phase ot-wo-evaluation/data "ot-wo-evaluation/$1" PEMSC --residualHandling ADD_RESIDUAL_ELEMENT --repetitions 30 --poolSize 80 
+# Test Residual Normalization
+python -m ot_backprop_pnwo.evaluation.evaluation_two_phase ot-wo-evaluation/data "ot-wo-evaluation/$1" PEMSC --residualHandling NORMALIZE --repetitions 30 --poolSize 80 
+#python -m ot_backprop_pnwo.evaluation.evaluation_two_phase ot-wo-evaluation/data/test-data "ot-wo-evaluation/$1" PEMSC --repetitions 2 --poolSize 6 --logNetData "${LOG_SPN_PAIRS[*]}" --otSizes 100,100 --enablePhaseII
+#python -m ot_backprop_pnwo.evaluation.evaluation_two_phase ot-wo-evaluation/data "ot-wo-evaluation/$1" EMSC --repetitions 30 --poolSize 66 
+#python -m ot_backprop_pnwo.evaluation.evaluation_two_phase ot-wo-evaluation/data "ot-wo-evaluation/$1" --repetitions 30 --poolSize 10
 
 END=$(date +%s)
 DIFF=$((END - START))
 echo "Ran evaluation in ${DIFF}s" 
 cp logfile.log "ot-wo-evaluation/$1"
-
 cd $STARTDIR
 

@@ -8,6 +8,7 @@ from typing import Union
 from ot_backprop_pnwo.optimization.data.data_creation import create_dataset_flex_paths, create_dataset_flex_paths_variants, create_dataset_flex_variants, spn_path_language_to_tensors
 from ot_backprop_pnwo.optimization.data.data_phase_one import DataPhaseOne
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 from ot_backprop_pnwo.spn.spn_path_sampling import SPN_TRANSITION_PROBABILITY
 from ot_backprop_pnwo.spn.spn_wrapper import SPNWrapper
 from ot_backprop_pnwo.stochastic_language.actindexing import ActivityIDConnector
@@ -138,6 +139,7 @@ class DataPhaseTwoFactory:
                               data_phase_one: DataPhaseOne,
                               nbr_paths: int, nbr_variants: int, nbr_samples: int,
                               emsc_loss_type: EMSCLossType,
+                              residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
                               ):
         logger = logging.getLogger(DataPhaseTwoFactory.__class__.__name__)
 
@@ -149,15 +151,15 @@ class DataPhaseTwoFactory:
         elif data_phase_one.is_spn_unfolded and not data_phase_one.is_log_complete:
             logger.info("Creating data phase 2: SPN completely unfolder | Multiple log samples")
             return DataPhaseTwoFactory._create_data_fix_flex(
-                data_phase_one, stoch_lang_log, nbr_variants, nbr_samples, emsc_loss_type)
+                data_phase_one, stoch_lang_log, nbr_variants, nbr_samples, emsc_loss_type, residual_handling=residual_handling)
         elif not data_phase_one.is_spn_unfolded and data_phase_one.is_log_complete:
             logger.info("Creating data phase 2: Multiple path samples | Full log")
             return DataPhaseTwoFactory._create_data_flex_fix(spn_container, act_id_conn, stoch_lang_log, 
-                                                              nbr_paths, nbr_variants, nbr_samples, emsc_loss_type)
+                                                              nbr_paths, nbr_variants, nbr_samples, emsc_loss_type, residual_handling=residual_handling)
         elif not data_phase_one.is_spn_unfolded and not data_phase_one.is_log_complete:
             logger.info("Creating data phase 2: Multiple path samples | Multiple log samples")
             return DataPhaseTwoFactory._create_data_flex_flex(spn_container, act_id_conn, stoch_lang_log, 
-                                                              nbr_paths, nbr_variants, nbr_samples, emsc_loss_type)
+                                                              nbr_paths, nbr_variants, nbr_samples, emsc_loss_type, residual_handling=residual_handling)
         else:
             raise Exception("Ups! Unforseen and not implemented scenario for phase two input")
         
@@ -165,16 +167,18 @@ class DataPhaseTwoFactory:
                                stoch_lang_log: StochasticLang, 
                                nbr_paths: int, nbr_variants: int, nbr_samples: int,
                                emsc_loss_type: EMSCLossType,
+                               residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
                                ) -> DataPhaseTwoFlexPFlexL:
         tf_data = create_dataset_flex_paths_variants(spn_container, stoch_lang_log, 
                                                 act_id_conn, nbr_samples, 
-                                                nbr_paths, nbr_variants, emsc_loss_type, trans_lh=SPN_TRANSITION_PROBABILITY.TRANSITION_WEIGHT)
+                                                nbr_paths, nbr_variants, emsc_loss_type, trans_lh=SPN_TRANSITION_PROBABILITY.TRANSITION_WEIGHT, residual_handling=residual_handling)
         return DataPhaseTwoFlexPFlexL(spn_container, act_id_conn=act_id_conn, tf_data_flex_path_flex_log=tf_data)
 
     def _create_data_flex_fix(spn_container: SPNWrapper, act_id_conn: ActivityIDConnector, 
                                stoch_lang_log: StochasticLang, 
                                nbr_paths: int, nbr_variants: int, nbr_samples: int,
                                emsc_loss_type: EMSCLossType,
+                               residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
                                ) -> DataPhaseTwoFlexPFixL:
         logger = logging.getLogger(DataPhaseTwoFactory.__class__.__name__)
         log_lang_tmp = stoch_lang_log
@@ -183,14 +187,19 @@ class DataPhaseTwoFactory:
             is_log_complete = False
             logger.info("Training with fixed log language but support of log lanugage is too large -> Sampling")
             (sl_sample_variants, sl_sample_prob) = log_lang_tmp.most_likely_variants(nbr_variants)
+            if residual_handling == ResidualHandling.NORMALIZE:
+                sl_sample_prob /= np.sum(sl_sample_prob)
             # Pseudo language (might not be normalized)
             log_lang_tmp = StochasticLang(act_id_conn, sl_sample_variants, sl_sample_prob)
 
+        residual_on_log = (not is_log_complete) and (residual_handling != ResidualHandling.NORMALIZE)
         (tf_data, variant_lh) = create_dataset_flex_paths(spn_container, log_lang_tmp,
-                                                    act_id_conn, nbr_samples, nbr_paths, 
-                                                    emsc_loss_type,
-                                                    add_log_residual=not is_log_complete,
-                                                    trans_lh=SPN_TRANSITION_PROBABILITY.TRANSITION_WEIGHT) 
+                                                          act_id_conn, nbr_samples, nbr_paths,
+                                                          emsc_loss_type,
+                                                          residual_on_log=residual_on_log,
+                                                          trans_lh=SPN_TRANSITION_PROBABILITY.TRANSITION_WEIGHT,
+                                                          residual_handling=residual_handling) 
+
 
         return DataPhaseTwoFlexPFixL(spn_container, act_id_conn, tf_data, variant_lh)
 
@@ -200,11 +209,13 @@ class DataPhaseTwoFactory:
             nbr_variants: int, 
             nbr_samples: int,
             emsc_loss_type: EMSCLossType,
+            residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT
         ) -> DataPhaseTwoFlexPFixL:
+        residual_on_model=(not data_phase_one.is_spn_unfolded) and (residual_handling != ResidualHandling.NORMALIZE) 
         tf_data_flex_variants = create_dataset_flex_variants(data_phase_one.pseudo_spn_lang, stoch_lang_log,
                                                 data_phase_one.act_id_conn, nbr_samples, 
-                                                nbr_variants, not data_phase_one.is_spn_unfolded, 
-                                                emsc_loss_type)
+                                                nbr_variants, residual_on_model=residual_on_model, 
+                                                emsc_loss_type=emsc_loss_type)
                                             
         # Could share it with first phase, but just create some fresh nodes (for safety)
         # Will avoid entangled computational graphs, yet might also be unnecessary, I don't know

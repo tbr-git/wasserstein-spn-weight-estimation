@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 
 
 @dataclass
@@ -17,6 +18,7 @@ class TwoPhaseRunUniqueIdentifyingConfig:
     distinguishes the runs
     """
     emsc_loss_type: EMSCLossType
+    residual_handling: ResidualHandling
     name_log: str
     name_spn: str
     max_nbr_paths: int

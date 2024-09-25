@@ -2,6 +2,7 @@ import logging.config
 import logging
 from multiprocessing import Pool
 import multiprocessing
+import traceback
 import pm4py
 from pathlib import Path
 import argparse
@@ -13,6 +14,7 @@ from ot_backprop_pnwo.evaluation.evaluation_param import ConvergenceConfig
 from ot_backprop_pnwo.evaluation.evaluation_reporting import EvaluationReporterTwoPhase, ExistingInitialRunRepo
 from ot_backprop_pnwo.evaluation.evaluation_util import exec_log_model_evaluation_two_phase
 from ot_backprop_pnwo.optimization.emsc_loss_type import EMSCLossType
+from ot_backprop_pnwo.optimization.model import ResidualHandling
 from ot_backprop_pnwo.spn import spn_util
 
 TEST_MODE = False
@@ -75,8 +77,8 @@ def ot_sizes_type(s: str):
     except:
         raise argparse.ArgumentTypeError("OT-size entries need to be a white-space or semicolon sparated list of a comma-separated pairs of values")
 
-def main(path_tasks: Path, path_results: Path, ot_sizes: list, l_log_pn_pairs: list, repetitions: int, conv_config: ConvergenceConfig, 
-         pool_size=10, emsc_loss_type=EMSCLossType.PEMSC, enable_phase_two=True):
+def main(path_tasks: Path, path_results: Path, ot_sizes: list, l_log_pn_pairs: list, conv_config: ConvergenceConfig, repetitions: int=20, 
+         pool_size:int =10, emsc_loss_type:EMSCLossType=EMSCLossType.PEMSC, enable_phase_two=True, residual_handling: ResidualHandling=ResidualHandling.ADD_RESIDUAL_ELEMENT):
     # Init Existing Run Repository
     log_names_unique = set(log_name for (log_name, _, _, _) in l_log_pn_pairs)
     log_result_folder_paths = (path_results.joinpath(log_name) for log_name in log_names_unique)
@@ -88,11 +90,10 @@ def main(path_tasks: Path, path_results: Path, ot_sizes: list, l_log_pn_pairs: l
         lock = m.Lock()
         with Pool(pool_size) as pool:
             for (log_name, log_path, pn_path, hot_start) in l_log_pn_pairs:
-                logger.info(f'Start evaluation for {log_name} and using hot-start: {hot_start} models')
+                logger.info(f'Start evaluation for {log_name} and using hot-start: {hot_start} models ({str(emsc_loss_type)}, {str(residual_handling)})')
                 # Load log
                 logger.info(f"Importing log {log_name}")
                 log_path = path_tasks.joinpath(log_path)
-                print(log_path)
                 log = pm4py.read_xes(str(log_path))
                 df_ev = pm4py.convert_to_dataframe(log)
 
@@ -125,7 +126,7 @@ def main(path_tasks: Path, path_results: Path, ot_sizes: list, l_log_pn_pairs: l
                                                         only_phase_one=not enable_phase_two,
                                                         print_missing_only=False,
                                                         convergence_configs=(conv_config, ),
-                                                        emsc_loss_type=emsc_loss_type)
+                                                        emsc_loss_type=emsc_loss_type, residual_handling=residual_handling)
                     if l_eval_instances_log is None:
                         l_eval_instances_log = l_instances_log_pn
                     else:
@@ -142,7 +143,8 @@ def main(path_tasks: Path, path_results: Path, ot_sizes: list, l_log_pn_pairs: l
                             future.get()
                         except Exception as e:
                             logger.error(f'Evaluation run {str(EvaluationReporterTwoPhase._get_flattened_key_param_dict(param))} failed')
-                            print(e)
+                            print(traceback.format_exc())
+                            logger.error(str(e))
 
                 logger.info(f"Executed {len(l_eval_instances_log)} evaluation runs")
 
@@ -167,6 +169,8 @@ if __name__ == '__main__':
     parser.add_argument('taskDirectory', type=str)
     parser.add_argument('resultDirectory', type=str)
     parser.add_argument('emscLossType', type=EMSCLossType, choices=list(EMSCLossType))
+    parser.add_argument('--residualHandling', type=ResidualHandling, choices=list(ResidualHandling), 
+                        default=ResidualHandling.ADD_RESIDUAL_ELEMENT, help="How residual probability is handled (i.e., by adding a residual model or log trace or by normalization")
     parser.add_argument('--otSizes', help='White space/semicolon separated list of comma-separated size tuples (spn times logs)', 
                         type=ot_sizes_type, nargs='+',
                         default=[(400, 400), (400, 2000), (800, 800), (800, 2000)])
@@ -184,7 +188,7 @@ if __name__ == '__main__':
     parser.add_argument('--poolSize', type=int, default=10)
     # Convergence Criterion
     parser.add_argument('--convMinIter', type=int, default=50)
-    parser.add_argument('--convMaxIter', type=int, default=50)
+    parser.add_argument('--convMaxIter', type=int, default=5000)
     parser.add_argument('--convEps', type=float, default=0.0025)
     # Phase II
     parser.add_argument('--enablePhaseII', action='store_true', help="Enables Phase II (if enabled, evaluation will run both (Phase I only, and Phase I + II if required)")
@@ -194,6 +198,7 @@ if __name__ == '__main__':
     path_results = Path(args.resultDirectory)
     repetitions = args.repetitions
     emsc_loss_type = args.emscLossType
+    residual_handling = args.residualHandling
     ot_sizes = args.otSizes
     pool_size = args.poolSize
     l_log_pn_pairs = args.logNetData
@@ -201,4 +206,4 @@ if __name__ == '__main__':
     conv_config = ConvergenceConfig(args.convMinIter, args.convMaxIter, args.convEps)
 
     main(path_tasks, path_results, ot_sizes, l_log_pn_pairs, conv_config, 
-         repetitions=repetitions, pool_size=pool_size, emsc_loss_type=emsc_loss_type, enable_phase_two=phase_two_enabled)
+         repetitions=repetitions, pool_size=pool_size, emsc_loss_type=emsc_loss_type, enable_phase_two=phase_two_enabled, residual_handling=residual_handling)
