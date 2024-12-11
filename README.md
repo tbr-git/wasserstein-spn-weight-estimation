@@ -14,6 +14,17 @@ To run the container:
 4. Run `docker compose up`
 5. Attach to the notebook. You will find an example notebook how to call the method. **Or:** Attach to the running container. In the `ot_backprop_pnwo` folder, there is a `scripts` folder that illustrates how you can run the method.
 
+### Known Problems
+The default build tries to install the Python Optimal Transport (POT) package from conda-forge. 
+This can cause problems if there does not exist a pre-build version for your machine since POT depends on C libraries. 
+Consequently, the image build might not "find" this package resulting in the following error.
+
+        ResolvePackageNotFound:
+            - pot
+
+In this case, you can try to use the provided `./docker/environment-compile.yml` file (i.e., replace the occurrence of `enviroment.yml` in the Dockerfile).
+The installation using pip will attempt to compile the required C libraries (the linux image should contain a C compiler by default).
+
 ## Non-docker Setup
 You can create a `conda` enviroment as follows:
 

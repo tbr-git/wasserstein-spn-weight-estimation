@@ -4,6 +4,6 @@ channels:
 dependencies:
   - ipywidgets
   - pip
-  - pot
   - pip:
     - pm4py
+    - POT[all]

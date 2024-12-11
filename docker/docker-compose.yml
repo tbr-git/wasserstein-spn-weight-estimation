@@ -1,7 +1,7 @@
 # docker-compose
 version: '3.8'
 services:
-  wave-nb-service:
+  wawe-nb-service:
     build:
       context: .
       dockerfile: Dockerfile
